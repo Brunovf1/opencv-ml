@@ -1,26 +1,56 @@
-FROM tensorflow/tensorflow:latest-gpu-jupyter
+FROM tensorflow/tensorflow:latest-gpu-py3
 
-ARG OPENCV_VERSION="4.4.0"
+ENV OPENCV_VERSION="4.4.0"
+
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-get update && apt-get install -y libopencv-dev yasm libjpeg-dev libavcodec-dev libavformat-dev libswscale-dev libdc1394-22-dev libv4l-dev python-dev python-numpy libtbb-dev libqt4-dev libgtk2.0-dev libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev libtheora-dev libvorbis-dev libxvidcore-dev x264 v4l-utils pkg-config curl build-essential checkinstall cmake
+RUN apt-get update \
+    && apt-get install -y \
+        build-essential \
+        cmake \
+        git \
+        wget \
+        unzip \
+        yasm \
+        pkg-config \
+        libswscale-dev \
+        libtbb2 \
+        libtbb-dev \
+        libjpeg-dev \
+        libpng-dev \
+        libtiff-dev \
+        libavformat-dev \
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# download opencv
-RUN curl -sL https://github.com/Itseez/opencv/archive/$OPENCV_VERSION.tar.gz | tar xvz -C /tmp && mkdir -p /tmp/opencv-$OPENCV_VERSION/build
+RUN pip install numpy
 
-WORKDIR /tmp/opencv-$OPENCV_VERSION/build
+WORKDIR /
 
-# install
-RUN cmake -DWITH_FFMPEG=OFF -DWITH_OPENEXR=OFF -DBUILD_TIFF=OFF -DWITH_CUDA=OFF -DWITH_NVCUVID=OFF -DBUILD_PNG=OFF ..
-RUN make && make install
-
-# configure
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/opencv.conf
-RUN ldconfig
-RUN ln /dev/null /dev/raw1394 # hide warning - http://stackoverflow.com/questions/12689304/ctypes-error-libdc1394-error-failed-to-initialize-libdc1394
-
-# cleanup package manager
-RUN apt-get remove --purge -y curl build-essential checkinstall cmake && apt-get autoclean && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-WORKDIR /tf
-# CMD source /etc/bash.bashrc && jupyter notebook --notebook-dir=/tf --ip 0.0.0.0 --no-browser --allow-root
+RUN wget https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip \
+&& unzip ${OPENCV_VERSION}.zip \
+&& mkdir /opencv-${OPENCV_VERSION}/cmake_binary \
+&& cd /opencv-${OPENCV_VERSION}/cmake_binary \
+&& cmake -DBUILD_TIFF=ON \
+  -DBUILD_opencv_java=OFF \
+  -DWITH_CUDA=ON \
+  -DWITH_OPENGL=ON \
+  -DWITH_OPENCL=ON \
+  -DWITH_IPP=ON \
+  -DWITH_TBB=ON \
+  -DWITH_EIGEN=ON \
+  -DWITH_V4L=ON \
+  -DBUILD_TESTS=OFF \
+  -DBUILD_PERF_TESTS=OFF \
+  -DCMAKE_BUILD_TYPE=RELEASE \
+  -DCMAKE_INSTALL_PREFIX=$(python3.7 -c "import sys; print(sys.prefix)") \
+  -DPYTHON_EXECUTABLE=$(which python3.7) \
+  -DPYTHON_INCLUDE_DIR=$(python3.7 -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())") \
+  -DPYTHON_PACKAGES_PATH=$(python3.7 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())") \
+  .. \
+&& make install \
+&& rm /${OPENCV_VERSION}.zip \
+&& rm -r /opencv-${OPENCV_VERSION}
+RUN ln -s \
+  /usr/local/python/cv2/python-3.7/cv2.cpython-37m-x86_64-linux-gnu.so \
+  /usr/local/lib/python3.7/site-packages/cv2.so
