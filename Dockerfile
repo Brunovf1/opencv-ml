@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu-py3
+FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 
 ENV OPENCV_VERSION="4.4.0"
 
@@ -9,45 +9,47 @@ RUN apt-get update \
         build-essential \
         cmake \
         git \
-        wget \
-        unzip \
-        yasm \
+        libgtk2.0-dev \
         pkg-config \
+        libavcodec-dev \
+        libavformat-dev \
         libswscale-dev \
+        python3-dev \
+        python3-pip \
         libtbb2 \
         libtbb-dev \
         libjpeg-dev \
         libpng-dev \
         libtiff-dev \
         libdc1394-22-dev \
-        libavcodec-dev \
-        libavformat-dev \
-        libswscale-dev \
-        libpq-dev \
-        libgstreamer-plugins-base1.0-dev \
-        libgstreamer1.0-dev \
-        libavresample-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install numpy
+RUN python3 -m pip --no-cache-dir install --upgrade \
+    pip \
+    numpy \
+    setuptools
 
-WORKDIR /
+RUN ln -s $(which python3) /usr/local/bin/python
 
-RUN wget -nv https://github.com/opencv/opencv_contrib/archive/${OPENCV_VERSION}.zip \
-&& mv ${OPENCV_VERSION}.zip opencv_contrib.zip \
-&& unzip opencv_contrib.zip
+WORKDIR /root
 
-RUN wget -nv https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip \
-&& unzip ${OPENCV_VERSION}.zip \
-&& mkdir /opencv-${OPENCV_VERSION}/cmake_binary \
-&& cd /opencv-${OPENCV_VERSION}/cmake_binary \
+RUN git clone https://github.com/opencv/opencv.git \
+    && git clone https://github.com/opencv/opencv_contrib.git
+
+RUN mkdir /root/opencv/cmake_binary \
+&& cd /root/opencv/cmake_binary \
 && cmake -DBUILD_TIFF=ON \
   -DBUILD_opencv_java=OFF \
-  -D WITH_VTK=OFF \
-  -D BUILD_opencv_viz=OFF \
-  # -DWITH_CUDA=ON \
-  # -DCUDNN_INCLUDE_DIR=/usr/include \
-  # -DCUDNN_LIBRARY=/usr/lib/x86_64-linux-gnu/libcudnn.so.7.6.4 \
+  -DWITH_VTK=OFF \
+  -DBUILD_opencv_viz=OFF \
+  -DINSTALL_PYTHON_EXAMPLES=ON \
+  -DOPENCV_ENABLE_NONFREE=ON \
+  -DWITH_CUDA=ON \
+  -DWITH_CUDNN=ON \
+  -DOPENCV_DNN_CUDA=ON \
+  -DENABLE_FAST_MATH=1 \
+  -DCUDA_FAST_MATH=1 \
+  -DWITH_CUBLAS=1 \
   -DWITH_OPENGL=ON \
   -DWITH_OPENCL=ON \
   -DWITH_IPP=ON \
@@ -59,18 +61,15 @@ RUN wget -nv https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.zip \
   -DCMAKE_BUILD_TYPE=RELEASE \
   -DBUILD_NEW_PYTHON_SUPPORT=ON \
   -DBUILD_opencv_python3=ON \
-  -DOPENCV_EXTRA_MODULES_PATH=/opencv_contrib-${OPENCV_VERSION}/modules \
+  -DOPENCV_EXTRA_MODULES_PATH=/root/opencv_contrib/modules \
   -DCMAKE_INSTALL_PREFIX=$(python -c "import sys; print(sys.prefix)") \
   -DPYTHON_EXECUTABLE=$(which python) \
   -DPYTHON_INCLUDE_DIR=$(python -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())") \
   -DPYTHON_PACKAGES_PATH=$(python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())") \
   .. \
 && make install \
-&& rm /${OPENCV_VERSION}.zip  /opencv_contrib.zip \
-&& rm -r /opencv-${OPENCV_VERSION} \
-&& rm -r /opencv_contrib-${OPENCV_VERSION}
+&& rm -r /root/opencv \
+&& rm -r /root/opencv_contrib
 
-
-RUN ln -s \
-  /usr/lib/python3.6/dist-packages/cv2/python-3.6/cv2.cpython-36m-x86_64-linux-gnu.so \
-  /usr/lib/python3.6/dist-packages/cv2.so
+RUN python -m pip --no-cache-dir install --upgrade \
+    tensorflow
